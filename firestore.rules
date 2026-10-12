@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ⚠ 與 SnakeG 共用同一個 Firebase 專案，而 Firestore 規則是整個專案只有一份。
+    // 部署本檔會整份取代線上規則，所以下面「SnakeG / tug-of-war」那幾段必須與 SnakeG/firestore.rules 保持一致，
+    // 只有 vocab_students 是本專案新增的。
+
+    // ---- 本專案：單詞學習進度（私人小程式，故意不做 Auth，跟 SnakeG 一致）----
+    match /vocab_students/{studentId} {
+      allow read, write: if true;
+
+      match /words/{wordId} {
+        allow read, write: if true;
+      }
+    }
+
+    // ---- SnakeG ----
+    match /students/{studentId} {
+      allow read, write: if true;
+
+      match /questionProgress/{questionId} {
+        allow read, write: if true;
+      }
+    }
+
+    match /highScores/{scoreId} {
+      allow read, create: if true;
+      allow update, delete: if false;
+    }
+
+    // ---- tug-of-war ----
+    match /tugofwar_matches/{matchId} {
+      allow read, create: if true;
+      allow update, delete: if false;
+    }
+    match /tugofwar_students/{studentId} {
+      allow read, write: if true;
+
+      match /questions/{questionId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

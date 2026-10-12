@@ -1,0 +1,42 @@
+{
+  "generatedAt": 0,
+  "students": [
+    {
+      "id": "hanna",
+      "name": "Hanna",
+      "words": [
+        {
+          "id": "sample-chair", "word": "chair", "type": "English Book", "pronunciation": "/tʃeə(r)/",
+          "meaning": "椅子", "collocation": "sit on a chair / a comfortable chair",
+          "example": "Please sit on the chair.", "synonyms": "seat", "antonyms": "",
+          "test": "如果我要說「請坐在椅子上」，該用哪個字？", "answer": "chair", "source": "Oxford P3 Term 1",
+          "status": "New", "learningDate": "2026-01-01", "reviewTimes": null,
+          "nextReviewDate": null, "lastReviewDate": null, "defer": false
+        },
+        {
+          "id": "sample-teacher", "word": "teacher", "type": "English Book", "pronunciation": "/ˈtiːtʃə(r)/",
+          "meaning": "老師", "collocation": "a good teacher / class teacher",
+          "example": "My English teacher is very kind.", "synonyms": "instructor", "antonyms": "student, pupil",
+          "test": "如果我要說「這是我的老師」，該用哪個字？", "answer": "teacher", "source": "Oxford P3 Term 1",
+          "status": "Learning", "learningDate": "2026-01-01", "reviewTimes": 1,
+          "nextReviewDate": "2026-01-02", "lastReviewDate": "2026-01-01", "defer": false
+        }
+      ]
+    },
+    {
+      "id": "henness",
+      "name": "Henness",
+      "words": [
+        {
+          "id": "sample-enormous", "word": "enormous", "type": "Others", "pronunciation": "/ɪˈnɔːməs/",
+          "meaning": "巨大的；龐大的", "collocation": "an enormous house / enormous amount of",
+          "example": "They live in an enormous house with a big garden.", "synonyms": "huge, immense, vast",
+          "antonyms": "tiny, small",
+          "test": "如果我要說「非常大」而不是普通的 big，可以用哪個更強的字？", "answer": "enormous", "source": "",
+          "status": "New", "learningDate": "2026-01-01", "reviewTimes": null,
+          "nextReviewDate": null, "lastReviewDate": null, "defer": false
+        }
+      ]
+    }
+  ]
+}

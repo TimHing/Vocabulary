@@ -1,0 +1,83 @@
+name: Sync Notion + Deploy to GitHub Pages + Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 * * * *' # 每小時：先把 Firestore 的學習進度推回 Notion，再重新讀取 Notion 並重新部署
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      # 順序很重要：先推回（Firestore → Notion），再讀取（Notion → words.json），快照才會包含最新進度
+      - run: node scripts/push-notion.mjs
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_VOCAB_PAGE_ID: ${{ secrets.NOTION_VOCAB_PAGE_ID }}
+
+      - run: node scripts/sync-notion.mjs
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_VOCAB_PAGE_ID: ${{ secrets.NOTION_VOCAB_PAGE_ID }}
+
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # 備援托管：Firebase Hosting（與 SnakeG 同一個專案，另開一個 site）
+  deploy-firebase:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: snakegame-91f56
+          channelId: live

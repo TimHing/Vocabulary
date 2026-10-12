@@ -1,0 +1,92 @@
+// 資料層：Notion 快照（words.json）＋ Firestore 即時進度。
+//
+// 學習進度先存 Firestore（vocab_students/{student}/words/{notionPageId}，dirty:true），
+// 由 GitHub Actions 的 push-notion 定時寫回 Notion。前端合併規則：
+// Firestore 文件若 dirty 為 true，或 updatedAt 比快照的 generatedAt 新，就覆蓋快照狀態；
+// 否則以快照（= Notion 現況）為準，這樣老師直接在 Notion 手動修改也不會被舊的 Firestore 記錄蓋掉。
+import {
+  collection, doc, getDocs, setDoc, serverTimestamp,
+} from 'firebase/firestore';
+import { db } from './firebase.js';
+import snapshot from './data/words.json';
+import { applyAction } from './scheduler.js';
+
+const PROGRESS_FIELDS = ['status', 'reviewTimes', 'nextReviewDate', 'lastReviewDate', 'defer'];
+const WRITE_TIMEOUT_MS = 6000;
+const READ_TIMEOUT_MS = 5000;
+
+const cache = new Map(); // studentId → Word[]（已合併 Firestore）
+
+export const store = { offline: false };
+
+export function getStudents() {
+  return snapshot.students.map(({ id, name }) => ({ id, name }));
+}
+
+function clone(words) {
+  return words.map((w) => ({ ...w }));
+}
+
+function applyProgress(words, docs) {
+  const byId = new Map(words.map((w) => [w.id, w]));
+  for (const d of docs) {
+    const word = byId.get(d.id);
+    if (!word) continue;
+    const data = d.data();
+    const updatedMs = data.updatedAt?.toMillis?.() ?? 0;
+    if (data.dirty === true || updatedMs > snapshot.generatedAt) {
+      for (const f of PROGRESS_FIELDS) {
+        if (f in data) word[f] = data[f];
+      }
+    }
+  }
+}
+
+/** 取得某位學生已合併 Firestore 進度的單詞列表（有快取；force 重新讀取）。 */
+export async function loadWords(studentId, force = false) {
+  if (!force && cache.has(studentId)) return cache.get(studentId);
+  const student = snapshot.students.find((s) => s.id === studentId);
+  if (!student) return null;
+
+  const words = clone(student.words);
+  try {
+    // Firestore 慢或連不上時不要讓畫面一直卡在「載入中」，逾時就退回 Notion 快照。
+    const snap = await Promise.race([
+      getDocs(collection(db, 'vocab_students', studentId, 'words')),
+      new Promise((_, reject) => { setTimeout(() => reject(new Error('讀取逾時')), READ_TIMEOUT_MS); }),
+    ]);
+    applyProgress(words, snap.docs);
+    store.offline = false;
+  } catch (err) {
+    console.error('讀取 Firestore 失敗，改用 Notion 快照：', err);
+    store.offline = true;
+  }
+  cache.set(studentId, words);
+  return words;
+}
+
+/** 套用學習動作：先更新記憶體，再存 Firestore（dirty:true，等 Actions 推回 Notion）。 */
+export async function saveAction(studentId, wordId, action, today) {
+  const words = cache.get(studentId);
+  const word = words?.find((w) => w.id === wordId);
+  if (!word) throw new Error('找不到單詞');
+
+  const before = { ...word };
+  Object.assign(word, applyAction(word, action, today));
+
+  const payload = { dirty: true, updatedAt: serverTimestamp() };
+  for (const f of PROGRESS_FIELDS) payload[f] = word[f] ?? null;
+  payload.defer = word.defer === true;
+
+  try {
+    const write = setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), payload, { merge: true });
+    // 離線時 Firestore 會一直排隊不 resolve；逾時就先放行，不卡住孩子的操作。
+    await Promise.race([
+      write,
+      new Promise((resolve) => { setTimeout(resolve, WRITE_TIMEOUT_MS); }),
+    ]);
+  } catch (err) {
+    Object.assign(word, before); // 存檔失敗就還原，避免畫面與雲端不一致
+    throw err;
+  }
+}

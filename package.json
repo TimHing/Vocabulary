@@ -1,0 +1,26 @@
+{
+  "name": "vocabulary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "孩子的單詞學習網頁 — 單詞存在 Notion，進度即時存 Firestore，GitHub Actions 定時同步回 Notion，靜態部署到 GitHub Pages + Firebase Hosting",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/sync-notion.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "migrate:notion": "node scripts/migrate-notion-schema.mjs",
+    "sync:notion": "node scripts/sync-notion.mjs",
+    "push:notion": "node scripts/push-notion.mjs"
+  },
+  "dependencies": {
+    "firebase": "^12.0.0"
+  },
+  "devDependencies": {
+    "@notionhq/client": "^2.3.0",
+    "dotenv": "^16.4.5",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
+  }
+}
