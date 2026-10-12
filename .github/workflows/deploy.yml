@@ -32,7 +32,10 @@ jobs:
       - run: npm test
 
       # 順序很重要：先推回（Firestore → Notion），再讀取（Notion → words.json），快照才會包含最新進度
+      # 推回失敗（Notion/Firestore 暫時出問題）不應擋住網站更新：未同步的進度仍在 Firestore（dirty:true），
+      # 前端會合併，下一小時再重試。
       - run: node scripts/push-notion.mjs
+        continue-on-error: true
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_VOCAB_PAGE_ID: ${{ secrets.NOTION_VOCAB_PAGE_ID }}
