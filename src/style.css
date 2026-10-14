@@ -102,3 +102,40 @@ h1, h2 { margin: 0; }
   .card-title h1 { font-size: 32px; }
   .btn { font-size: 13px; }
 }
+
+/* 小測 */
+.card.quiz { padding-bottom: 24px; }
+.q-type { margin: 0 0 12px; font-size: 13px; color: var(--muted); letter-spacing: .04em; }
+.q-word { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.q-big { font-size: 32px; font-weight: 700; margin: 0 0 14px; }
+.q-word .q-big { margin: 0; }
+.q-text { font-size: 20px; margin: 0 0 8px; }
+.answer-input {
+  width: 100%; padding: 14px; font-size: 22px; border: 2px solid var(--line);
+  border-radius: 12px; margin: 8px 0 10px; background: var(--card); color: var(--text);
+}
+.answer-input:focus { outline: none; border-color: var(--accent); }
+#answer-form .btn { width: 100%; }
+.options { display: grid; gap: 10px; }
+.option {
+  padding: 14px; font-size: 18px; text-align: left; background: var(--card);
+  border: 2px solid var(--line); border-radius: 12px; cursor: pointer; color: var(--text);
+}
+.option:hover:not(:disabled) { border-color: var(--accent); }
+.option:disabled { cursor: default; }
+.option.correct { border-color: var(--green); background: #e6f6ee; }
+.option.wrong { border-color: var(--red); background: #fde4e4; }
+.pill.small { width: auto; padding: 8px 16px; font-size: 14px; margin-top: 4px; }
+.feedback { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 18px; }
+.feedback.ok { background: #e6f6ee; color: #146c3f; }
+.feedback.bad { background: #fde4e4; color: #a12c2c; }
+.actions.one { grid-template-columns: 1fr; }
+.actions.two { grid-template-columns: 1fr 1fr; }
+a.btn { display: block; text-align: center; }
+.result h2 { font-size: 24px; margin-bottom: 8px; }
+.result.pass { border-color: var(--green); }
+.result.fail { border-color: var(--orange); }
+.result-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+.result-list li { padding: 10px 12px; border-radius: 10px; background: var(--bg); }
+.result-list li.ok { border-left: 4px solid var(--green); }
+.result-list li.bad { border-left: 4px solid var(--red); }

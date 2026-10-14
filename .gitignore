@@ -9,3 +9,7 @@ dist/
 src/data/words.json
 Requirement.txt
 Example.png
+
+# 服務帳戶金鑰，絕不能提交
+*-firebase-adminsdk-*.json
+serviceAccount*.json

@@ -44,7 +44,7 @@ export async function renderCard(app, studentId, wordId) {
       <button class="btn btn-finish" id="finished" type="button">Finished</button>
       <button class="btn btn-master" id="mastered" type="button">Mastered</button>
     </div>
-    <p class="hint">Mastered = 已經完全學會，之後不再出現在清單</p>
+    <p class="hint">Finished 和 Mastered 都要先通過小測；Mastered = 3 題全對才算完全學會，之後不再出現在清單</p>
     <p class="error" id="msg" hidden></p>`;
 
   $('#speak')?.addEventListener('click', () => speak(word.word));
@@ -56,22 +56,23 @@ export async function renderCard(app, studentId, wordId) {
     e.currentTarget.textContent = answer.hidden ? '顯示答案' : '隱藏答案';
   });
 
-  const buttons = ['later', 'finished', 'mastered'].map((id) => $(`#${id}`));
-  const run = async (action) => {
-    if (action === 'mastered' && !window.confirm(`確定「${word.word}」已經完全掌握了嗎？\n之後不會再出現在 Today / Review。`)) return;
-    buttons.forEach((b) => { b.disabled = true; });
+  // Learn Next Time 直接存；Finished / Mastered 要先通過小測（見 pages/quiz.js），通過後才寫入進度。
+  const quizBase = `${back}/w/${encodeURIComponent(wordId)}/quiz`;
+  const finishMode = word.status === 'New' && word.reviewTimes == null ? 'learn' : 'review';
+  $('#later').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
     try {
-      await saveAction(studentId, wordId, action, toDateStr());
+      await saveAction(studentId, wordId, 'later', toDateStr());
       location.hash = back;
     } catch (err) {
       console.error(err);
-      buttons.forEach((b) => { b.disabled = false; });
+      btn.disabled = false;
       const msg = $('#msg');
       msg.textContent = `儲存失敗：${err.message}。請檢查網絡後再試一次。`;
       msg.hidden = false;
     }
-  };
-  $('#later').addEventListener('click', () => run('later'));
-  $('#finished').addEventListener('click', () => run('finished'));
-  $('#mastered').addEventListener('click', () => run('mastered'));
+  });
+  $('#finished').addEventListener('click', () => { location.hash = `${quizBase}/${finishMode}`; });
+  $('#mastered').addEventListener('click', () => { location.hash = `${quizBase}/mastered`; });
 }

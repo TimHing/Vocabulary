@@ -22,10 +22,23 @@ Notion ◀──(push-notion, Actions 每小時)── Firestore vocab_students/
 | Today 點 Finished | Status=Learning、Review Times=0、明天複習 |
 | Today 點 Learn Next Time | Status=Learning、Defer=true，一直留在 Review，直到點 Finished（不加分） |
 | Review 點 Finished | Review Times+1，下次間隔 2、4、7、15、30 天（每次從完成當日起算，逾期不堆疊）；第 6 次溫習後 Status=Finished |
-| Mastered | 按下前先確認；Status=Finished，退出 Today/Review，**不補分** |
+| Mastered | 通過 3 題小測後：Status=Finished，退出 Today/Review，**不補分**（見下方「小測」） |
 | 分數 | 只有點 Finished 才加分：首次 +1、每次溫習 +1，每個單詞滿分 7。首頁「換算分數」= 累計分 ÷ (總詞數×7) ×100 |
 
 Review Times 為空代表「從未 Finished 過」（0 分）。
+
+## 小測（考核與練習）
+
+Finished 和 Mastered 都要先通過小測，答對才寫入進度；答錯不寫入，單詞留在原處。**不需要改 Notion 表**，題目全部用現有欄位產生。
+
+| 情境 | 小測 |
+|---|---|
+| Today 新詞點 Finished | 1 題「選意思」（4 選 1），答對才進入 Learning |
+| Review 點 Finished | 1 題，題型隨 Review Times 變難：0–1 選意思；2–3 看意思拼詞／例句填空／理解測試；4–5 聽寫／看意思拼詞／例句填空。答對才推進階段並加分 |
+| 點 Mastered | 3 題不同題型（不含選擇題、不給提示），**全對**才標 Finished，否則單詞照原排程 |
+| Learn Next Time | 不出題 |
+
+拼寫忽略大小寫和多餘空格，錯一個字母算錯。缺資料的單詞會自動換別的題型；完全沒有可出的題目時，讓孩子直接完成，不卡住。出題邏輯在 `src/quiz.js`（有單測），頁面在 `src/pages/quiz.js`。
 
 ## Notion 表結構
 
