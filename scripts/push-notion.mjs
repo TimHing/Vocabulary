@@ -1,28 +1,19 @@
 // 把 Firestore 裡「尚未同步」（dirty:true）的學習進度寫回 Notion，成功後標記 dirty:false。
 // 讀 Firestore 沿用 SnakeG 的完全開放規則（不需密鑰）；只寫 Notion 的
-// Status／Review Times／Next Review Date／Last Review Date／Defer 五個欄位。
+// Status／Review Times／Next Review Date／Last Review Date／Defer（學習進度）與
+// Quiz Correct／Quiz Wrong／Last Quiz Date（小測記錄）欄位。
 // 只在本機手動或 GitHub Actions 排程裡跑。
 import 'dotenv/config';
 import { initializeApp } from 'firebase/app';
 import {
-  getFirestore, collection, query, where, getDocs, updateDoc,
+  getFirestore, collection, query, where, getDocs, runTransaction,
 } from 'firebase/firestore';
 import { firebaseConfig } from '../src/firebaseConfig.js';
-import { createClient, extractId, findStudentDatabases, sleep } from './notion-lib.mjs';
+import {
+  createClient, extractId, findStudentDatabases, sleep, toNotionProperties,
+} from './notion-lib.mjs';
 
 const THROTTLE_MS = 350; // Notion 速率限制約每秒 3 次
-
-const dateProp = (d) => ({ date: d ? { start: d } : null });
-
-export function toNotionProperties(data) {
-  return {
-    Status: { select: { name: data.status } },
-    'Review Times': { number: typeof data.reviewTimes === 'number' ? data.reviewTimes : null },
-    'Next Review Date': dateProp(data.nextReviewDate),
-    'Last Review Date': dateProp(data.lastReviewDate),
-    Defer: { checkbox: data.defer === true },
-  };
-}
 
 async function main() {
   if (!process.env.NOTION_TOKEN) {
@@ -49,7 +40,13 @@ async function main() {
         // eslint-disable-next-line no-await-in-loop
         await notion.pages.update({ page_id: d.id, properties: toNotionProperties(d.data()) });
         // eslint-disable-next-line no-await-in-loop
-        await updateDoc(d.ref, { dirty: false });
+        // 推送期間若孩子又答題（updatedAt 變了）就維持 dirty，留給下一輪，避免漏掉新的記錄
+        await runTransaction(db, async (tx) => {
+          const cur = await tx.get(d.ref);
+          if (cur.data()?.updatedAt?.toMillis?.() === d.data().updatedAt?.toMillis?.()) {
+            tx.update(d.ref, { dirty: false, progressDirty: false });
+          }
+        });
         pushed += 1;
       } catch (err) {
         failed += 1;

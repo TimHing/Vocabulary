@@ -42,7 +42,9 @@ Finished 和 Mastered 都要先通過小測，答對才寫入進度；答錯不�
 
 ## Notion 表結構
 
-兩個學生的 Vocabulary Database 統一有：Word、Type、Pronunciation、Meaning、Collocation、Example、Synonyms、Antonyms、Understanding Test、Test Answer、Source、Status(New/Learning/Finished)、Learning Date、Review Times、Next Review Date、Last Review Date、Defer。`Learned?` 已不再使用（保留未刪）。
+兩個學生的 Vocabulary Database 統一有：Word、Type、Pronunciation、Meaning、Collocation、Example、Synonyms、Antonyms、Understanding Test、Test Answer、Source、Status(New/Learning/Finished)、Learning Date、Review Times、Next Review Date、Last Review Date、Defer，以及小測記錄 Quiz Correct、Quiz Wrong、Last Quiz Date。`Learned?` 已不再使用（保留未刪）。
+
+**小測記錄**（給家長在 Notion 看，網頁上不顯示）：孩子每答一題（Today / Review / Mastered 的每一題，答對答錯都算）就累計一次到該單詞的 Quiz Correct 或 Quiz Wrong，並更新 Last Quiz Date。在 Notion 資料庫按 Quiz Wrong 由大到小排序，就能找出常錯的詞；Last Quiz Date 可看孩子最近有沒有在練。和學習進度一樣先存 Firestore，每小時由 Actions 寫回 Notion。
 
 用 `npm run migrate:notion` 檢查（dry-run），`npm run migrate:notion -- --apply` 才真的新增缺少的欄位並把空的 Learning Date 補成今天。
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, isToday, isReview, applyAction, wordScore, studentStats, INTERVALS,
+  addDays, isToday, isReview, applyAction, wordScore, studentStats, INTERVALS, recordQuizResult,
 } from '../src/scheduler.js';
 
 const TODAY = '2026-10-12';
@@ -158,5 +158,26 @@ describe('計分與統計', () => {
 
   it('空列表不會除以 0', () => {
     expect(studentStats([], TODAY).percent).toBe(0);
+  });
+});
+
+describe('recordQuizResult', () => {
+  it('答對 +1 correct、答錯 +1 wrong，並記錄日期', () => {
+    const w = base();
+    expect(recordQuizResult(w, true, TODAY)).toEqual({ quizCorrect: 1, quizWrong: 0, lastQuizDate: TODAY });
+    expect(recordQuizResult(w, false, TODAY)).toEqual({ quizCorrect: 0, quizWrong: 1, lastQuizDate: TODAY });
+  });
+  it('在既有次數上累加；欄位缺失視為 0', () => {
+    const w = base({ quizCorrect: 4, quizWrong: 2 });
+    expect(recordQuizResult(w, true, '2026-10-14')).toEqual({ quizCorrect: 5, quizWrong: 2, lastQuizDate: '2026-10-14' });
+    expect(recordQuizResult(w, false, '2026-10-14')).toEqual({ quizCorrect: 4, quizWrong: 3, lastQuizDate: '2026-10-14' });
+  });
+  it('不影響排程與分數', () => {
+    const w = merge(base(), applyAction(base(), 'finished', TODAY));
+    const after = merge(w, recordQuizResult(w, false, TODAY));
+    expect(wordScore(after)).toBe(wordScore(w));
+    expect(after.status).toBe(w.status);
+    expect(after.nextReviewDate).toBe(w.nextReviewDate);
+    expect(after.reviewTimes).toBe(w.reviewTimes);
   });
 });

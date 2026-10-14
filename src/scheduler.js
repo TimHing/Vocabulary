@@ -101,6 +101,18 @@ export function applyAction(word, action, today) {
   }
 }
 
+/**
+ * 記錄一題小測的結果（累計答對/答錯次數 + 最後小測日期），回傳要更新的欄位，不修改原物件。
+ * 與排程、分數無關：只是給家長在 Notion 看孩子有沒有認真練、哪些詞常錯。
+ */
+export function recordQuizResult(word, ok, today) {
+  return {
+    quizCorrect: (word.quizCorrect || 0) + (ok ? 1 : 0),
+    quizWrong: (word.quizWrong || 0) + (ok ? 0 : 1),
+    lastQuizDate: today,
+  };
+}
+
 /** 單詞得分：Review Times 為空 = 從未 Finished 過 = 0 分，否則 1 + Review Times */
 export function wordScore(word) {
   return word.reviewTimes == null ? 0 : 1 + word.reviewTimes;

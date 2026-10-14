@@ -35,6 +35,9 @@ export function parseWord(page) {
     nextReviewDate: getDate(p['Next Review Date']),
     lastReviewDate: getDate(p['Last Review Date']),
     defer: getCheckbox(p.Defer),
+    quizCorrect: getNumber(p['Quiz Correct']) ?? 0,
+    quizWrong: getNumber(p['Quiz Wrong']) ?? 0,
+    lastQuizDate: getDate(p['Last Quiz Date']),
   };
 }
 

@@ -9,9 +9,10 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import snapshot from './data/words.json';
-import { applyAction } from './scheduler.js';
+import { applyAction, recordQuizResult } from './scheduler.js';
 
 const PROGRESS_FIELDS = ['status', 'reviewTimes', 'nextReviewDate', 'lastReviewDate', 'defer'];
+const QUIZ_FIELDS = ['quizCorrect', 'quizWrong', 'lastQuizDate']; // 小測記錄，與學習進度分開寫
 const WRITE_TIMEOUT_MS = 6000;
 const READ_TIMEOUT_MS = 5000;
 
@@ -35,7 +36,7 @@ function applyProgress(words, docs) {
     const data = d.data();
     const updatedMs = data.updatedAt?.toMillis?.() ?? 0;
     if (data.dirty === true || updatedMs > snapshot.generatedAt) {
-      for (const f of PROGRESS_FIELDS) {
+      for (const f of [...PROGRESS_FIELDS, ...QUIZ_FIELDS]) {
         if (f in data) word[f] = data[f];
       }
     }
@@ -74,7 +75,8 @@ export async function saveAction(studentId, wordId, action, today) {
   const before = { ...word };
   Object.assign(word, applyAction(word, action, today));
 
-  const payload = { dirty: true, updatedAt: serverTimestamp() };
+  // progressDirty：這份文件裡的學習進度還沒推回 Notion（push-notion 只在它不為 false 時才寫進度欄位）
+  const payload = { dirty: true, progressDirty: true, updatedAt: serverTimestamp() };
   for (const f of PROGRESS_FIELDS) payload[f] = word[f] ?? null;
   payload.defer = word.defer === true;
 
@@ -89,4 +91,19 @@ export async function saveAction(studentId, wordId, action, today) {
     Object.assign(word, before); // 存檔失敗就還原，避免畫面與雲端不一致
     throw err;
   }
+}
+
+/**
+ * 記錄一題小測的結果（答對/答錯次數、最後小測日期）。
+ * 只寫小測欄位，不碰學習進度；失敗不影響小測本身（只記 log），所以不用 await。
+ */
+export function recordQuiz(studentId, wordId, ok, today) {
+  const word = cache.get(studentId)?.find((w) => w.id === wordId);
+  if (!word) return Promise.resolve();
+  Object.assign(word, recordQuizResult(word, ok, today));
+
+  const payload = { dirty: true, updatedAt: serverTimestamp() };
+  for (const f of QUIZ_FIELDS) payload[f] = word[f];
+  return setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), payload, { merge: true })
+    .catch((err) => { console.error('記錄小測結果失敗（不影響小測）：', err); });
 }

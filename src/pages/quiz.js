@@ -3,7 +3,7 @@
 //   review   Review 溫習 → 1 題（題型隨階段變難），答對才 Finished（推進階段 + 加分）
 //   mastered 完全掌握 → 3 題不同題型，全對才標 Mastered
 // 沒通過就完全不寫入進度；通過才呼叫 saveAction。
-import { loadWords, saveAction } from '../store.js';
+import { loadWords, saveAction, recordQuiz } from '../store.js';
 import { toDateStr } from '../scheduler.js';
 import { speak, canSpeak } from '../speech.js';
 import {
@@ -172,6 +172,7 @@ export async function renderQuiz(app, studentId, wordId, mode) {
       answered = true;
       const ok = checkAnswer(q, input);
       results.push({ q, input, ok });
+      recordQuiz(studentId, wordId, ok, toDateStr()); // 每答一題就記一次（對/錯都記），不阻塞畫面
 
       const fb = $('#feedback');
       fb.className = `feedback ${ok ? 'ok' : 'bad'}`;

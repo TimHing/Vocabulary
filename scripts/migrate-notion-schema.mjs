@@ -1,5 +1,6 @@
 // 一次性（冪等）修正 Notion 單詞表結構：兩位學生的 Vocabulary Database 統一加上
 //   Learning Date（date）／Next Review Date（date）／Defer（checkbox）
+//   Quiz Correct／Quiz Wrong（number，小測累計答對/答錯次數）／Last Quiz Date（date）
 // 並把 Learning Date 為空的單詞從今天起每天 5 個錯開。Review Times 沿用現有欄位，Learned? 暫不刪除。
 //
 // 預設 dry-run，只印出會做的事；加 --apply 才真的寫入：
@@ -23,6 +24,9 @@ const NEW_PROPS = {
   'Learning Date': { date: {} },
   'Next Review Date': { date: {} },
   Defer: { checkbox: {} },
+  'Quiz Correct': { number: { format: 'number' } },
+  'Quiz Wrong': { number: { format: 'number' } },
+  'Last Quiz Date': { date: {} },
 };
 
 async function main() {

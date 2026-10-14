@@ -28,6 +28,28 @@ export function localToday(d = new Date()) {
 
 export const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
+const dateProp = (d) => ({ date: d ? { start: d } : null });
+
+/**
+ * 把 Firestore 單詞進度文件轉成 Notion 頁面屬性。只寫文件裡有的欄位：
+ * 學習進度只在 progressDirty 不為 false 時才寫（舊文件沒有此旗標，視為需要寫）；
+ * 只記了小測次數的文件不含 status，也不會把 Status 等欄位清掉或用舊值覆蓋 Notion 上的手動修改。
+ */
+export function toNotionProperties(data) {
+  const props = {};
+  if (typeof data.status === 'string' && data.progressDirty !== false) {
+    props.Status = { select: { name: data.status } };
+    props['Review Times'] = { number: typeof data.reviewTimes === 'number' ? data.reviewTimes : null };
+    props['Next Review Date'] = dateProp(data.nextReviewDate);
+    props['Last Review Date'] = dateProp(data.lastReviewDate);
+    props.Defer = { checkbox: data.defer === true };
+  }
+  if (typeof data.quizCorrect === 'number') props['Quiz Correct'] = { number: data.quizCorrect };
+  if (typeof data.quizWrong === 'number') props['Quiz Wrong'] = { number: data.quizWrong };
+  if (typeof data.lastQuizDate === 'string') props['Last Quiz Date'] = dateProp(data.lastQuizDate);
+  return props;
+}
+
 /**
  * 從 Vocabulary 父頁找出每位學生的單詞資料庫。
  * 子頁標題為 Vocabulary_<Name>（例：Vocabulary_Henness、Vocabulary_HANNA），
