@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addDays, isToday, isReview, applyAction, wordScore, studentStats, INTERVALS, recordQuizResult,
+  masteredCooldownLeft, canQuizDirectly, MASTERED_COOLDOWN_MS,
 } from '../src/scheduler.js';
 
 const TODAY = '2026-10-12';
@@ -179,5 +180,38 @@ describe('recordQuizResult', () => {
     expect(after.status).toBe(w.status);
     expect(after.nextReviewDate).toBe(w.nextReviewDate);
     expect(after.reviewTimes).toBe(w.reviewTimes);
+  });
+});
+
+describe('Mastered 冷卻', () => {
+  const NOW = 1_700_000_000_000;
+  it('沒有失敗記錄 → 沒有冷卻', () => {
+    expect(masteredCooldownLeft(base(), NOW)).toBe(0);
+    expect(masteredCooldownLeft(base({ masteredFailAt: null }), NOW)).toBe(0);
+  });
+  it('剛答錯 → 還剩完整冷卻時間；過了一半 → 剩一半', () => {
+    expect(masteredCooldownLeft(base({ masteredFailAt: NOW }), NOW)).toBe(MASTERED_COOLDOWN_MS);
+    expect(masteredCooldownLeft(base({ masteredFailAt: NOW }), NOW + MASTERED_COOLDOWN_MS / 2)).toBe(MASTERED_COOLDOWN_MS / 2);
+  });
+  it('剛好到時間或更晚 → 0，不會是負數', () => {
+    expect(masteredCooldownLeft(base({ masteredFailAt: NOW }), NOW + MASTERED_COOLDOWN_MS)).toBe(0);
+    expect(masteredCooldownLeft(base({ masteredFailAt: NOW }), NOW + MASTERED_COOLDOWN_MS * 5)).toBe(0);
+  });
+  it('可自訂冷卻長度', () => {
+    expect(masteredCooldownLeft(base({ masteredFailAt: NOW }), NOW + 1000, 5000)).toBe(4000);
+  });
+});
+
+describe('canQuizDirectly（Review 跳過學習卡）', () => {
+  it('Finished 過至少一次的 Learning 單詞可以直接考', () => {
+    expect(canQuizDirectly(base({ status: 'Learning', reviewTimes: 0, nextReviewDate: TODAY }))).toBe(true);
+    expect(canQuizDirectly(base({ status: 'Learning', reviewTimes: 5 }))).toBe(true);
+  });
+  it('從沒 Finished 過的（Learn Next Time 的新詞）要先看卡片', () => {
+    expect(canQuizDirectly(base({ status: 'Learning', reviewTimes: null, defer: true }))).toBe(false);
+  });
+  it('New / Finished 狀態不適用', () => {
+    expect(canQuizDirectly(base({ status: 'New' }))).toBe(false);
+    expect(canQuizDirectly(base({ status: 'Finished', reviewTimes: 6 }))).toBe(false);
   });
 });

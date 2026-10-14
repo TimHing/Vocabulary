@@ -34,6 +34,10 @@ function applyProgress(words, docs) {
     const word = byId.get(d.id);
     if (!word) continue;
     const data = d.data();
+    // Mastered 冷卻時間戳不走 Notion 同步，不論 dirty 與否都套用（取最近的一次）
+    if (typeof data.masteredFailAt === 'number') {
+      word.masteredFailAt = Math.max(word.masteredFailAt || 0, data.masteredFailAt);
+    }
     const updatedMs = data.updatedAt?.toMillis?.() ?? 0;
     if (data.dirty === true || updatedMs > snapshot.generatedAt) {
       for (const f of [...PROGRESS_FIELDS, ...QUIZ_FIELDS]) {
@@ -106,4 +110,15 @@ export function recordQuiz(studentId, wordId, ok, today) {
   for (const f of QUIZ_FIELDS) payload[f] = word[f];
   return setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), payload, { merge: true })
     .catch((err) => { console.error('記錄小測結果失敗（不影響小測）：', err); });
+}
+
+/**
+ * 記錄 Mastered 小測答錯的時間（開始冷卻）。只存 Firestore，不標 dirty、不寫回 Notion；
+ * 失敗不影響小測本身，但仍會在記憶體裡生效。
+ */
+export function recordMasteredFail(studentId, wordId, now = Date.now()) {
+  const word = cache.get(studentId)?.find((w) => w.id === wordId);
+  if (word) word.masteredFailAt = now;
+  return setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), { masteredFailAt: now }, { merge: true })
+    .catch((err) => { console.error('記錄 Mastered 冷卻失敗：', err); });
 }

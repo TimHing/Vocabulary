@@ -1,10 +1,15 @@
 // 小測頁：#/s/:student/w/:wid/quiz/:mode
 //   learn    Today 新詞首次學完 → 1 題選意思，答對才 Finished
 //   review   Review 溫習 → 1 題（題型隨階段變難），答對才 Finished（推進階段 + 加分）
-//   mastered 完全掌握 → 3 題不同題型，全對才標 Mastered
+//   mastered 完全掌握 → 3 題不同題型，全對才標 Mastered；答錯任何一題就開始冷卻（見 scheduler.js MASTERED_COOLDOWN_MS）
+//
+// Review 單詞若已 Finished 過（canQuizDirectly），學習清單會直接連到這一頁、跳過學習卡，避免照抄答案；
+// 答錯後的結果頁才提供「回學習卡再看看」。
 // 沒通過就完全不寫入進度；通過才呼叫 saveAction。
-import { loadWords, saveAction, recordQuiz } from '../store.js';
-import { toDateStr } from '../scheduler.js';
+import {
+  loadWords, saveAction, recordQuiz, recordMasteredFail,
+} from '../store.js';
+import { toDateStr, masteredCooldownLeft, canQuizDirectly } from '../scheduler.js';
 import { speak, canSpeak } from '../speech.js';
 import {
   countDistractors, pickReviewType, buildQuestion, buildMasteredQuiz, checkAnswer,
@@ -42,13 +47,34 @@ export async function renderQuiz(app, studentId, wordId, mode) {
   const results = [];
   let index = 0;
   let saving = false;
+  let failRecorded = false;
 
+  // 直接從清單進來的 Review 小測：返回清單（不能繞去學習卡看答案）；其他情況返回學習卡
+  const direct = mode === 'review' && canQuizDirectly(word);
   const header = (extra = '') => `
     <header class="top">
-      <a class="back" href="${cardHref}">← 返回學習卡</a>
+      <a class="back" href="${direct ? listHref : cardHref}">${direct ? '← 返回清單' : '← 返回學習卡'}</a>
       <h1>${esc(title)}</h1>
       ${extra}
     </header>`;
+
+  // Mastered 冷卻中：不出題，直接告訴孩子還要等多久
+  const cooldownLeft = mode === 'mastered' ? masteredCooldownLeft(word) : 0;
+  if (cooldownLeft > 0) {
+    const mins = Math.ceil(cooldownLeft / 60000);
+    app.innerHTML = `
+      ${header()}
+      <article class="card result fail">
+        <h2>先休息一下 ⏳</h2>
+        <p>「${esc(word.word)}」的 Mastered 小測剛剛答錯了，還要等約 <b>${mins}</b> 分鐘才能再挑戰。</p>
+        <p class="muted">趁這段時間再多看幾遍學習卡吧！</p>
+      </article>
+      <div class="actions two">
+        <a class="btn btn-later" href="${cardHref}">看學習卡</a>
+        <a class="btn btn-master" href="${listHref}">回清單</a>
+      </div>`;
+    return;
+  }
 
   async function pass() {
     if (saving) return;
@@ -158,7 +184,8 @@ export async function renderQuiz(app, studentId, wordId, mode) {
         ${body}
         <div class="feedback" id="feedback" hidden></div>
       </article>
-      <div class="actions one"><button class="btn btn-finish" id="next" type="button" hidden>下一步</button></div>`;
+      <div class="actions one"><button class="btn btn-finish" id="next" type="button" hidden>下一步</button></div>
+      ${direct ? `<p class="hint"><a href="${cardHref}/quiz/mastered">已經完全掌握？挑戰 Mastered 小測</a></p>` : ''}`;
 
     $('#q-speak')?.addEventListener('click', () => speak(q.answer));
     $('#hint')?.addEventListener('click', (e) => {
@@ -173,6 +200,11 @@ export async function renderQuiz(app, studentId, wordId, mode) {
       const ok = checkAnswer(q, input);
       results.push({ q, input, ok });
       recordQuiz(studentId, wordId, ok, toDateStr()); // 每答一題就記一次（對/錯都記），不阻塞畫面
+      // Mastered 只要錯一題就算失敗，立刻開始冷卻（不等到結果頁，中途離開也逃不掉）
+      if (mode === 'mastered' && !ok && !failRecorded) {
+        failRecorded = true;
+        recordMasteredFail(studentId, wordId);
+      }
 
       const fb = $('#feedback');
       fb.className = `feedback ${ok ? 'ok' : 'bad'}`;

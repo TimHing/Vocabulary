@@ -139,3 +139,6 @@ a.btn { display: block; text-align: center; }
 .result-list li { padding: 10px 12px; border-radius: 10px; background: var(--bg); }
 .result-list li.ok { border-left: 4px solid var(--green); }
 .result-list li.bad { border-left: 4px solid var(--red); }
+
+.tag-quiz { background: var(--accent-soft); color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }

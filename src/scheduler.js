@@ -101,6 +101,23 @@ export function applyAction(word, action, today) {
   }
 }
 
+/** Mastered 小測答錯後，要等多久才能再挑戰（毫秒）。 */
+export const MASTERED_COOLDOWN_MS = 10 * 60 * 1000;
+
+/** Mastered 冷卻還剩幾毫秒（0 = 可以挑戰）。masteredFailAt 是最近一次 Mastered 答錯的時間戳（毫秒）。 */
+export function masteredCooldownLeft(word, now = Date.now(), cooldownMs = MASTERED_COOLDOWN_MS) {
+  if (!word.masteredFailAt) return 0;
+  return Math.max(0, word.masteredFailAt + cooldownMs - now);
+}
+
+/**
+ * Review 單詞是否可以跳過學習卡、直接考：已經 Finished 過至少一次（Review Times 不為空）才行。
+ * 從沒真正完成過的（例如 Today 點了 Learn Next Time 的）還沒學會，要先看卡片。
+ */
+export function canQuizDirectly(word) {
+  return word.status === 'Learning' && word.reviewTimes != null;
+}
+
 /**
  * 記錄一題小測的結果（累計答對/答錯次數 + 最後小測日期），回傳要更新的欄位，不修改原物件。
  * 與排程、分數無關：只是給家長在 Notion 看孩子有沒有認真練、哪些詞常錯。

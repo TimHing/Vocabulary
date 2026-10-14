@@ -1,5 +1,7 @@
 import { getStudents, loadWords, store } from '../store.js';
-import { todayList, reviewList, toDateStr } from '../scheduler.js';
+import {
+  todayList, reviewList, toDateStr, canQuizDirectly,
+} from '../scheduler.js';
 import { esc } from '../util.js';
 
 function listHtml(studentId, words, today, kind) {
@@ -8,13 +10,17 @@ function listHtml(studentId, words, today, kind) {
   }
   return `<ul class="word-list">${words.map((w) => {
     const overdue = kind === 'review' && !w.defer && w.nextReviewDate && w.nextReviewDate < today;
+    // 已經 Finished 過的 Review 單詞直接進小測（跳過學習卡，避免照抄答案）
+    const direct = kind === 'review' && canQuizDirectly(w);
+    const href = `#/s/${encodeURIComponent(studentId)}/w/${encodeURIComponent(w.id)}${direct ? '/quiz/review' : ''}`;
     const tags = [
+      direct ? '<span class="tag tag-quiz">直接小測</span>' : '',
       w.defer ? '<span class="tag tag-later">下次再學</span>' : '',
       overdue ? '<span class="tag tag-overdue">已逾期</span>' : '',
     ].join('');
     return `
       <li>
-        <a class="word-item" href="#/s/${encodeURIComponent(studentId)}/w/${encodeURIComponent(w.id)}">
+        <a class="word-item" href="${href}">
           <span class="w-word">${esc(w.word)}</span>
           <span class="w-meaning">${esc(w.meaning)}</span>
           ${tags}

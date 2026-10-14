@@ -40,6 +40,10 @@ Finished 和 Mastered 都要先通過小測，答對才寫入進度；答錯不�
 
 拼寫忽略大小寫和多餘空格，錯一個字母算錯。缺資料的單詞會自動換別的題型；完全沒有可出的題目時，讓孩子直接完成，不卡住。出題邏輯在 `src/quiz.js`（有單測），頁面在 `src/pages/quiz.js`。
 
+**Review 跳過學習卡**：Finished 過至少一次的 Review 單詞（Review Times 不為空），在清單裡標示「直接小測」，點進去直接是小測，看不到答案，避免照抄；答錯後的結果頁才提供「回學習卡再看看」。從沒 Finished 過的（例如 Today 點了 Learn Next Time 的新詞）還沒學會，仍先看學習卡。小測頁底部有「挑戰 Mastered 小測」入口。判斷在 `canQuizDirectly`（`src/scheduler.js`）。
+
+**Mastered 冷卻**：Mastered 小測答錯**任何一題**就立刻開始冷卻 10 分鐘（中途離開也逃不掉）。冷卻期間學習卡上的 Mastered 按鈕停用並顯示剩餘分鐘，直接開網址也會被擋。冷卻時間戳存在 Firestore 的 `masteredFailAt`（換裝置也有效，不寫回 Notion）。長度由 `MASTERED_COOLDOWN_MS`（`src/scheduler.js`）決定。
+
 ## Notion 表結構
 
 兩個學生的 Vocabulary Database 統一有：Word、Type、Pronunciation、Meaning、Collocation、Example、Synonyms、Antonyms、Understanding Test、Test Answer、Source、Status(New/Learning/Finished)、Learning Date、Review Times、Next Review Date、Last Review Date、Defer，以及小測記錄 Quiz Correct、Quiz Wrong、Last Quiz Date。`Learned?` 已不再使用（保留未刪）。

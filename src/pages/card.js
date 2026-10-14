@@ -1,5 +1,5 @@
 import { loadWords, saveAction } from '../store.js';
-import { toDateStr } from '../scheduler.js';
+import { toDateStr, masteredCooldownLeft } from '../scheduler.js';
 import { speak, canSpeak } from '../speech.js';
 import { esc, $ } from '../util.js';
 
@@ -73,6 +73,13 @@ export async function renderCard(app, studentId, wordId) {
       msg.hidden = false;
     }
   });
+  // Mastered 小測答錯後冷卻中：按鈕停用並顯示還要等多久
+  const cooldownLeft = masteredCooldownLeft(word);
+  if (cooldownLeft > 0) {
+    const m = $('#mastered');
+    m.disabled = true;
+    m.textContent = `Mastered（${Math.ceil(cooldownLeft / 60000)} 分鐘後）`;
+  }
   $('#finished').addEventListener('click', () => { location.hash = `${quizBase}/${finishMode}`; });
   $('#mastered').addEventListener('click', () => { location.hash = `${quizBase}/mastered`; });
 }
