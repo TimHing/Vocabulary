@@ -19,6 +19,14 @@ describe('toNotionProperties', () => {
     expect(p['Last Quiz Date']).toEqual({ date: { start: '2026-10-16' } });
   });
 
+  it('points 寫到 Notion 的 Points 欄位（含 0 與負數），不受 progressDirty 影響', () => {
+    expect(toNotionProperties({ points: 12 }).Points).toEqual({ number: 12 });
+    expect(toNotionProperties({ points: 0 }).Points).toEqual({ number: 0 });
+    expect(toNotionProperties({ points: -3 }).Points).toEqual({ number: -3 });
+    expect(toNotionProperties({ ...progress, progressDirty: false, points: 4 }).Points).toEqual({ number: 4 });
+    expect(toNotionProperties({ quizCorrect: 1 }).Points).toBeUndefined();
+  });
+
   it('舊文件沒有 progressDirty 旗標 → 仍寫學習進度（向下相容）', () => {
     expect(toNotionProperties(progress).Status).toEqual({ select: { name: 'Learning' } });
   });

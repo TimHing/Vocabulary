@@ -44,6 +44,7 @@ export function toNotionProperties(data) {
     props['Last Review Date'] = dateProp(data.lastReviewDate);
     props.Defer = { checkbox: data.defer === true };
   }
+  if (typeof data.points === 'number') props.Points = { number: data.points };
   if (typeof data.quizCorrect === 'number') props['Quiz Correct'] = { number: data.quizCorrect };
   if (typeof data.quizWrong === 'number') props['Quiz Wrong'] = { number: data.quizWrong };
   if (typeof data.lastQuizDate === 'string') props['Last Quiz Date'] = dateProp(data.lastQuizDate);

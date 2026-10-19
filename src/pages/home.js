@@ -1,5 +1,5 @@
 import { getStudents, loadWords, store } from '../store.js';
-import { studentStats, toDateStr, MAX_SCORE_PER_WORD } from '../scheduler.js';
+import { studentStats, toDateStr } from '../scheduler.js';
 import { esc } from '../util.js';
 
 export async function renderHome(app) {
@@ -13,10 +13,9 @@ export async function renderHome(app) {
       <a class="student-card" href="#/s/${encodeURIComponent(s.id)}">
         <div class="student-head">
           <h2>${esc(s.name)}</h2>
-          <div class="score"><span class="score-num">${st.percent}</span><span class="score-unit">分</span></div>
+          <div class="score"><span class="score-num">${st.score}</span><span class="score-unit">分</span></div>
         </div>
-        <div class="bar"><div class="bar-fill" style="width:${st.percent}%"></div></div>
-        <p class="muted">累計 ${st.score} / ${st.maxScore} 分（每個單詞滿分 ${MAX_SCORE_PER_WORD}）</p>
+        <p class="muted">累計分數（輸入題答對 +1、完成 Finished/Review +1、Mastered +2、選擇題答錯 −1）</p>
         <ul class="stat-grid">
           <li><b>${st.total}</b><span>總單詞</span></li>
           <li><b>${st.new}</b><span>New</span></li>

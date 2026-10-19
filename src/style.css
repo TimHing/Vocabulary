@@ -142,3 +142,6 @@ a.btn { display: block; text-align: center; }
 
 .tag-quiz { background: var(--accent-soft); color: var(--accent); }
 .btn:disabled { opacity: .5; cursor: default; }
+
+.points { font-size: 20px; margin: 8px 0 0; }
+.points b { color: var(--green); font-size: 26px; }

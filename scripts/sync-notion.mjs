@@ -16,6 +16,7 @@ const SAMPLE = join(DATA_DIR, 'words.sample.json');
 
 export function parseWord(page) {
   const p = page.properties;
+  const reviewTimes = getNumber(p['Review Times']);
   return {
     id: page.id,
     word: getTitle(p.Word).trim(),
@@ -31,7 +32,9 @@ export function parseWord(page) {
     source: getRichText(p.Source),
     status: getSelectName(p.Status) || 'New',
     learningDate: getDate(p['Learning Date']),
-    reviewTimes: getNumber(p['Review Times']),
+    reviewTimes,
+    // 累計分；Notion 還沒有 Points 時用舊公式（從沒 Finished 過 0 分，否則 1 + Review Times）當起始值
+    points: getNumber(p.Points) ?? (reviewTimes == null ? 0 : 1 + reviewTimes),
     nextReviewDate: getDate(p['Next Review Date']),
     lastReviewDate: getDate(p['Last Review Date']),
     defer: getCheckbox(p.Defer),

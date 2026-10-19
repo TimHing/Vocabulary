@@ -9,10 +9,11 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import snapshot from './data/words.json';
-import { applyAction, recordQuizResult } from './scheduler.js';
+import { applyAction, recordQuizResult, wordPoints } from './scheduler.js';
 
 const PROGRESS_FIELDS = ['status', 'reviewTimes', 'nextReviewDate', 'lastReviewDate', 'defer'];
-const QUIZ_FIELDS = ['quizCorrect', 'quizWrong', 'lastQuizDate']; // 小測記錄，與學習進度分開寫
+// 小測記錄與累計分（points），跟學習進度分開寫
+const QUIZ_FIELDS = ['quizCorrect', 'quizWrong', 'lastQuizDate', 'points'];
 const WRITE_TIMEOUT_MS = 6000;
 const READ_TIMEOUT_MS = 5000;
 
@@ -71,18 +72,26 @@ export async function loadWords(studentId, force = false) {
 }
 
 /** 套用學習動作：先更新記憶體，再存 Firestore（dirty:true，等 Actions 推回 Notion）。 */
-export async function saveAction(studentId, wordId, action, today) {
+/**
+ * pointsDelta：這次完成要加的分數（一起寫進同一份文件，進度與分數不會只存到一半）。
+ */
+export async function saveAction(studentId, wordId, action, today, pointsDelta = 0) {
   const words = cache.get(studentId);
   const word = words?.find((w) => w.id === wordId);
   if (!word) throw new Error('找不到單詞');
 
   const before = { ...word };
+  // 起始分數要在套用動作「之前」取：沒有 points 的單詞用舊公式（依 Review Times）當起始值，
+  // 動作之後 Review Times 變了，再算就會多算
+  const basePoints = wordPoints(word);
   Object.assign(word, applyAction(word, action, today));
+  if (pointsDelta) word.points = basePoints + pointsDelta;
 
   // progressDirty：這份文件裡的學習進度還沒推回 Notion（push-notion 只在它不為 false 時才寫進度欄位）
   const payload = { dirty: true, progressDirty: true, updatedAt: serverTimestamp() };
   for (const f of PROGRESS_FIELDS) payload[f] = word[f] ?? null;
   payload.defer = word.defer === true;
+  if (pointsDelta) payload.points = word.points;
 
   try {
     const write = setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), payload, { merge: true });
@@ -107,7 +116,8 @@ export function recordQuiz(studentId, wordId, ok, today) {
   Object.assign(word, recordQuizResult(word, ok, today));
 
   const payload = { dirty: true, updatedAt: serverTimestamp() };
-  for (const f of QUIZ_FIELDS) payload[f] = word[f];
+  // Firestore 不接受 undefined：單詞還沒有 points（例如快照是新欄位上線前產生的）就先不寫它
+  for (const f of QUIZ_FIELDS) if (word[f] !== undefined) payload[f] = word[f];
   return setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), payload, { merge: true })
     .catch((err) => { console.error('記錄小測結果失敗（不影響小測）：', err); });
 }
@@ -121,4 +131,20 @@ export function recordMasteredFail(studentId, wordId, now = Date.now()) {
   if (word) word.masteredFailAt = now;
   return setDoc(doc(db, 'vocab_students', studentId, 'words', wordId), { masteredFailAt: now }, { merge: true })
     .catch((err) => { console.error('記錄 Mastered 冷卻失敗：', err); });
+}
+
+/**
+ * 調整單詞累計分（例如選擇題答錯 -1）。只寫分數欄位，不碰學習進度；
+ * 失敗不影響小測本身（只記 log），所以呼叫端不用 await。
+ */
+export function adjustPoints(studentId, wordId, delta) {
+  const word = cache.get(studentId)?.find((w) => w.id === wordId);
+  if (!word || !delta) return Promise.resolve();
+  word.points = wordPoints(word) + delta;
+
+  return setDoc(
+    doc(db, 'vocab_students', studentId, 'words', wordId),
+    { points: word.points, dirty: true, updatedAt: serverTimestamp() },
+    { merge: true },
+  ).catch((err) => { console.error('記錄分數失敗（不影響小測）：', err); });
 }

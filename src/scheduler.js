@@ -12,7 +12,6 @@
 // 首次 Finished 後 +1 天；之後完成第 n 次溫習，下次間隔 INTERVALS[n]；完成第 6 次溫習即 Finished。
 export const INTERVALS = [1, 2, 4, 7, 15, 30];
 export const MAX_REVIEWS = INTERVALS.length; // 6
-export const MAX_SCORE_PER_WORD = MAX_REVIEWS + 1; // 首次 Finished 1 分 + 6 次溫習
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -130,12 +129,26 @@ export function recordQuizResult(word, ok, today) {
   };
 }
 
-/** 單詞得分：Review Times 為空 = 從未 Finished 過 = 0 分，否則 1 + Review Times */
-export function wordScore(word) {
+/**
+ * 舊公式：Review Times 為空 = 從未 Finished 過 = 0 分，否則 1 + Review Times。
+ * 只用來當「還沒有 Points 欄位的單詞」的起始分數（保留孩子已經賺到的分數）。
+ */
+export function legacyScore(word) {
   return word.reviewTimes == null ? 0 : 1 + word.reviewTimes;
 }
 
-/** 學生統計：各狀態數量、累計分數、滿分、百分制換算分數 */
+/**
+ * 單詞目前的累計分（Notion 的 Points 欄位）。事件累計制：輸入題答對、完成 Finished/Review/Mastered 加分，
+ * 選擇題答錯扣分——無法從狀態推算，所以要存起來。沒有 Points 時用舊公式當起始值。
+ */
+export function wordPoints(word) {
+  return typeof word.points === 'number' ? word.points : legacyScore(word);
+}
+
+/**
+ * 學生統計：各狀態數量與累計分。分數是純累計（所有單詞的 Points 相加，總分不會低於 0），
+ * 不跟總單詞數掛鉤，新增單詞不會讓分數變動。
+ */
 export function studentStats(words, today) {
   const stats = {
     total: words.length,
@@ -145,9 +158,8 @@ export function studentStats(words, today) {
     today: 0,
     review: 0,
     score: 0,
-    maxScore: words.length * MAX_SCORE_PER_WORD,
-    percent: 0,
   };
+  let sum = 0;
   for (const w of words) {
     const status = w.status || 'New';
     if (status === 'Finished') stats.finished += 1;
@@ -155,8 +167,8 @@ export function studentStats(words, today) {
     else stats.new += 1;
     if (isToday(w, today)) stats.today += 1;
     if (isReview(w, today)) stats.review += 1;
-    stats.score += wordScore(w);
+    sum += wordPoints(w);
   }
-  stats.percent = stats.maxScore ? Math.round((stats.score / stats.maxScore) * 100) : 0;
+  stats.score = Math.max(0, sum);
   return stats;
 }

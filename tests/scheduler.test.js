@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, isToday, isReview, applyAction, wordScore, studentStats, INTERVALS, recordQuizResult,
+  addDays, isToday, isReview, applyAction, legacyScore, wordPoints, studentStats, INTERVALS, recordQuizResult,
   masteredCooldownLeft, canQuizDirectly, MASTERED_COOLDOWN_MS,
 } from '../src/scheduler.js';
 
@@ -66,7 +66,7 @@ describe('Finished 與遺忘曲線', () => {
       }
     }
     expect(w).toMatchObject({ status: 'Finished', reviewTimes: 6, nextReviewDate: null });
-    expect(wordScore(w)).toBe(7);
+    expect(legacyScore(w)).toBe(7);
     // 累計距離首次學習：1、3、7、14、29、59 天
     expect(gaps).toEqual(['2026-10-13', '2026-10-15', '2026-10-19', '2026-10-26', '2026-11-10', '2026-12-10']);
     expect(day).toBe(addDays(TODAY, 59));
@@ -94,7 +94,7 @@ describe('Learn Next Time', () => {
     expect(isToday(w, TODAY)).toBe(false);
     expect(isReview(w, TODAY)).toBe(true);
     expect(isReview(w, '2026-12-01')).toBe(true);
-    expect(wordScore(w)).toBe(0);
+    expect(legacyScore(w)).toBe(0);
   });
 
   it('延後的新詞之後點 Finished 走首次 Finished 邏輯', () => {
@@ -122,43 +122,60 @@ describe('Mastered', () => {
     expect(w).toMatchObject({ status: 'Finished', defer: false, nextReviewDate: null, reviewTimes: null });
     expect(isToday(w, TODAY)).toBe(false);
     expect(isReview(w, TODAY)).toBe(false);
-    expect(wordScore(w)).toBe(0);
+    expect(legacyScore(w)).toBe(0);
   });
 
   it('Review 中的詞掌握：保留已賺到的分數', () => {
     let w = merge(base(), applyAction(base(), 'finished', TODAY));
     w = merge(w, applyAction(w, 'finished', '2026-10-13'));
     w = merge(w, applyAction(w, 'finished', '2026-10-15')); // reviewTimes 2 → 3 分
-    expect(wordScore(w)).toBe(3);
+    expect(legacyScore(w)).toBe(3);
     w = merge(w, applyAction(w, 'mastered', '2026-10-19'));
     expect(w.status).toBe('Finished');
-    expect(wordScore(w)).toBe(3);
+    expect(legacyScore(w)).toBe(3);
     expect(isReview(w, '2026-12-01')).toBe(false);
   });
 });
 
 describe('計分與統計', () => {
-  it('wordScore', () => {
-    expect(wordScore(base())).toBe(0);
-    expect(wordScore(base({ reviewTimes: 0 }))).toBe(1);
-    expect(wordScore(base({ reviewTimes: 6 }))).toBe(7);
+  it('legacyScore', () => {
+    expect(legacyScore(base())).toBe(0);
+    expect(legacyScore(base({ reviewTimes: 0 }))).toBe(1);
+    expect(legacyScore(base({ reviewTimes: 6 }))).toBe(7);
   });
 
-  it('studentStats', () => {
+  it('wordPoints：有 points 用 points，沒有就用舊公式當起始值', () => {
+    expect(wordPoints(base({ points: 12 }))).toBe(12);
+    expect(wordPoints(base({ points: 0, reviewTimes: 6 }))).toBe(0); // points 優先，即使是 0
+    expect(wordPoints(base({ points: -2 }))).toBe(-2);
+    expect(wordPoints(base({ reviewTimes: 3 }))).toBe(4); // 沒有 points → 舊公式 1 + 3
+    expect(wordPoints(base())).toBe(0);
+  });
+
+  it('studentStats：各狀態數量 + 累計分（所有單詞 points 相加）', () => {
     const words = [
-      base(), // New, today
-      base({ status: 'Learning', reviewTimes: 0, nextReviewDate: TODAY }), // 1 分，review
-      base({ status: 'Learning', defer: true }), // 0 分，review
-      base({ status: 'Finished', reviewTimes: 6 }), // 7 分
+      base(), // New, today，沒有 points、舊公式 0
+      base({ status: 'Learning', reviewTimes: 0, nextReviewDate: TODAY, points: 6 }),
+      base({ status: 'Learning', defer: true, points: -1 }),
+      base({ status: 'Finished', reviewTimes: 6, points: 20 }),
     ];
-    const s = studentStats(words, TODAY);
-    expect(s).toMatchObject({
-      total: 4, new: 1, learning: 2, finished: 1, today: 1, review: 2, score: 8, maxScore: 28, percent: 29,
+    expect(studentStats(words, TODAY)).toEqual({
+      total: 4, new: 1, learning: 2, finished: 1, today: 1, review: 2, score: 25,
     });
   });
 
-  it('空列表不會除以 0', () => {
-    expect(studentStats([], TODAY).percent).toBe(0);
+  it('分數是純累計：新增單詞不會讓分數變動', () => {
+    const words = [base({ status: 'Learning', reviewTimes: 1, points: 9 })];
+    const before = studentStats(words, TODAY).score;
+    const more = [...words, ...Array.from({ length: 50 }, () => base())];
+    expect(studentStats(more, TODAY).score).toBe(before);
+    expect(studentStats(more, TODAY)).not.toHaveProperty('percent');
+    expect(studentStats(more, TODAY)).not.toHaveProperty('maxScore');
+  });
+
+  it('總分不會低於 0', () => {
+    expect(studentStats([base({ points: -5 }), base({ points: 2 })], TODAY).score).toBe(0);
+    expect(studentStats([], TODAY).score).toBe(0);
   });
 });
 
@@ -176,7 +193,7 @@ describe('recordQuizResult', () => {
   it('不影響排程與分數', () => {
     const w = merge(base(), applyAction(base(), 'finished', TODAY));
     const after = merge(w, recordQuizResult(w, false, TODAY));
-    expect(wordScore(after)).toBe(wordScore(w));
+    expect(legacyScore(after)).toBe(legacyScore(w));
     expect(after.status).toBe(w.status);
     expect(after.nextReviewDate).toBe(w.nextReviewDate);
     expect(after.reviewTimes).toBe(w.reviewTimes);

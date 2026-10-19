@@ -1,18 +1,21 @@
 // 小測頁：#/s/:student/w/:wid/quiz/:mode
-//   learn    Today 新詞首次學完 → 1 題選意思，答對才 Finished
-//   review   Review 溫習 → 1 題（題型隨階段變難），答對才 Finished（推進階段 + 加分）
+//   learn    單詞第一次學完（Review Times 為空）→ 1 題錄入題（優先聽寫：自動讀兩次單詞，孩子輸入），答對才 Finished
+//   review   Review 溫習 → 1 題。第 2、6 次溫習是錄入題（聽寫），其他次數照難度階梯；
+//            聽寫與選擇題進入時自動讀兩次單詞。答對才 Finished（推進階段）
 //   mastered 完全掌握 → 3 題不同題型，全對才標 Mastered；答錯任何一題就開始冷卻（見 scheduler.js MASTERED_COOLDOWN_MS）
 //
 // Review 單詞若已 Finished 過（canQuizDirectly），學習清單會直接連到這一頁、跳過學習卡，避免照抄答案；
 // 答錯後的結果頁才提供「回學習卡再看看」。
-// 沒通過就完全不寫入進度；通過才呼叫 saveAction。
+// 沒通過就完全不寫入進度；通過才呼叫 saveAction（同時加分，見 quiz.js passPoints）。
+// 選擇題答錯當場扣 1 分（adjustPoints）；輸入題答錯不扣分。
 import {
-  loadWords, saveAction, recordQuiz, recordMasteredFail,
+  loadWords, saveAction, recordQuiz, recordMasteredFail, adjustPoints,
 } from '../store.js';
 import { toDateStr, masteredCooldownLeft, canQuizDirectly } from '../scheduler.js';
-import { speak, canSpeak } from '../speech.js';
+import { speak, speakTwice, canSpeak } from '../speech.js';
 import {
-  countDistractors, pickReviewType, buildQuestion, buildMasteredQuiz, checkAnswer,
+  countDistractors, pickLearnType, pickReviewType, buildQuestion, buildMasteredQuiz, checkAnswer,
+  passPoints, wrongPenalty,
 } from '../quiz.js';
 import { esc, $ } from '../util.js';
 
@@ -27,7 +30,7 @@ const TYPE_LABEL = {
 
 function buildQuestions(mode, word, pool, ctx) {
   if (mode === 'mastered') return buildMasteredQuiz(word, pool, ctx);
-  const type = mode === 'learn' ? pickReviewType(0, word, ctx) : pickReviewType(word.reviewTimes, word, ctx);
+  const type = mode === 'learn' ? pickLearnType(word, ctx) : pickReviewType(word.reviewTimes, word, ctx);
   return type ? [buildQuestion(type, word, pool)] : [];
 }
 
@@ -42,7 +45,9 @@ export async function renderQuiz(app, studentId, wordId, mode) {
   const action = mode === 'mastered' ? 'mastered' : 'finished';
   const ctx = { canSpeak: canSpeak(), distractors: countDistractors(word, words) };
   const questions = buildQuestions(mode, word, words, ctx);
-  const title = { learn: '小測：確認認得', review: '溫習小測', mastered: '完全掌握小測' }[mode];
+  const title = { learn: '學習小測', review: '溫習小測', mastered: '完全掌握小測' }[mode];
+  // 這次通過可以拿到的分數；沒有題目、直接完成時不加分
+  const earned = questions.length ? passPoints(mode, questions) : 0;
 
   const results = [];
   let index = 0;
@@ -80,7 +85,7 @@ export async function renderQuiz(app, studentId, wordId, mode) {
     if (saving) return;
     saving = true;
     try {
-      await saveAction(studentId, wordId, action, toDateStr());
+      await saveAction(studentId, wordId, action, toDateStr(), earned);
       location.hash = listHref;
     } catch (err) {
       console.error(err);
@@ -123,6 +128,7 @@ export async function renderQuiz(app, studentId, wordId, mode) {
         <article class="card result pass">
           <h2>🎉 全部答對！</h2>
           <p>${mode === 'mastered' ? `「${esc(word.word)}」標記為完全掌握。` : `「${esc(word.word)}」完成學習。`}</p>
+          <p class="points">本次獲得 <b>+${earned}</b> 分</p>
           ${mode === 'mastered' ? `<ul class="result-list">${rows}</ul>` : ''}
         </article>
         <div class="actions one"><button class="btn btn-finish" id="done" type="button">確定</button></div>
@@ -154,6 +160,9 @@ export async function renderQuiz(app, studentId, wordId, mode) {
     const speakBtn = canSpeak()
       ? '<button class="icon-btn" id="q-speak" type="button" aria-label="播放發音" title="播放發音">🔊</button>' : '';
 
+    // Finished / Review 的聽寫與選擇題：進入時自動讀兩次單詞（拼寫類題型不讀，會洩漏答案）
+    const autoTwice = (mode === 'learn' || mode === 'review') && (q.type === 'dictation' || q.type === 'mcq');
+
     let body = '';
     if (q.type === 'mcq') {
       body = `
@@ -163,7 +172,7 @@ export async function renderQuiz(app, studentId, wordId, mode) {
       let prompt = '';
       if (q.type === 'spell') prompt = `<p class="q-big">${esc(q.prompt)}</p>`;
       else if (q.type === 'cloze') prompt = `<p class="q-text">${esc(q.prompt)}</p><p class="muted">意思：${esc(q.meaning)}</p>`;
-      else if (q.type === 'dictation') prompt = `<div class="q-word">${speakBtn || '<span class="muted">此裝置不支援發音</span>'}<span class="muted">按 🔊 聽發音</span></div>`;
+      else if (q.type === 'dictation') prompt = `<div class="q-word">${speakBtn || '<span class="muted">此裝置不支援發音</span>'}<span class="muted">${autoTwice ? '會自動讀兩次，按 🔊 可以再聽' : '按 🔊 聽發音'}</span></div>`;
       else if (q.type === 'test') prompt = `<p class="q-text">${esc(q.prompt)}</p>`;
       const hint = q.type === 'spell' && mode !== 'mastered'
         ? `<button class="pill small" id="hint" type="button">提示：首字母</button><p class="muted" id="hint-text" hidden>首字母是「${esc(q.hint)}」</p>` : '';
@@ -206,11 +215,15 @@ export async function renderQuiz(app, studentId, wordId, mode) {
         recordMasteredFail(studentId, wordId);
       }
 
+      // 選擇題答錯扣 1 分（輸入題答錯不扣）
+      const penalty = ok ? 0 : wrongPenalty(q);
+      if (penalty) adjustPoints(studentId, wordId, penalty);
+
       const fb = $('#feedback');
       fb.className = `feedback ${ok ? 'ok' : 'bad'}`;
       fb.innerHTML = ok
         ? '✓ 答對了！'
-        : `✗ 答錯了。正確答案：<b>${esc(q.answer)}</b>`;
+        : `✗ 答錯了${penalty ? `（${penalty} 分）` : ''}。正確答案：<b>${esc(q.answer)}</b>`;
       fb.hidden = false;
 
       $('#answer')?.setAttribute('disabled', '');
@@ -241,7 +254,8 @@ export async function renderQuiz(app, studentId, wordId, mode) {
     });
 
     $('#answer')?.focus();
-    if (q.type === 'dictation') speak(q.answer);
+    if (autoTwice) speakTwice(q.type === 'mcq' ? q.prompt : q.answer);
+    else if (q.type === 'dictation') speak(q.answer);
   }
 
   renderQuestion();

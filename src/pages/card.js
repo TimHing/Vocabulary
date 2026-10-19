@@ -58,7 +58,7 @@ export async function renderCard(app, studentId, wordId) {
 
   // Learn Next Time 直接存；Finished / Mastered 要先通過小測（見 pages/quiz.js），通過後才寫入進度。
   const quizBase = `${back}/w/${encodeURIComponent(wordId)}/quiz`;
-  const finishMode = word.status === 'New' && word.reviewTimes == null ? 'learn' : 'review';
+  const finishMode = word.reviewTimes == null ? 'learn' : 'review'; // 從沒 Finished 過 = 第一次學完
   $('#later').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;

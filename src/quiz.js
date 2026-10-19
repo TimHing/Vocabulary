@@ -71,7 +71,14 @@ export function availableTypes(word, ctx = {}) {
   return types;
 }
 
-// Review 題型階梯（依 Review Times，空視為 0）
+// 「錄入」題型 = 要自己把單詞輸入的題型（相對於選擇題）。
+export const TYPED_TYPES = ['dictation', 'spell', 'cloze', 'test'];
+export const isTypedType = (type) => TYPED_TYPES.includes(type);
+
+// 第 2 次、第 6 次溫習（= 完成前 Review Times 為 1、5）一定是錄入題。
+export const TYPED_REVIEW_TIMES = [1, 5];
+
+// 其他次數的 Review 題型階梯（依 Review Times，空視為 0）
 const TIERS = [
   { max: 1, types: ['mcq'] },
   { max: 3, types: ['spell', 'cloze', 'test'] },
@@ -79,15 +86,53 @@ const TIERS = [
 ];
 const FALLBACK_ORDER = ['spell', 'cloze', 'test', 'dictation', 'mcq'];
 
-/** 依 Review Times 選題型；該階梯都不可用時退回其他可用題型，完全沒有就回傳 null。 */
+/**
+ * 選一題「錄入」題型：優先聽寫（進入時自動讀兩次單詞，孩子輸入）；裝置不支援發音等原因不能聽寫時，
+ * 退回看意思拼詞 → 例句填空 → 理解測試；全都不可用才退回選擇題；完全沒有可出的題回傳 null。
+ */
+export function pickTypedType(word, ctx) {
+  const avail = availableTypes(word, ctx);
+  return TYPED_TYPES.find((t) => avail.includes(t)) ?? (avail.includes('mcq') ? 'mcq' : null);
+}
+
+/** 點 Finished（單詞第一次學完，Review Times 為空）時的題型：錄入題。 */
+export function pickLearnType(word, ctx) {
+  return pickTypedType(word, ctx);
+}
+
+/**
+ * 依 Review Times（本次溫習之前已完成的溫習次數）選 Review 題型：
+ * 第 2、6 次溫習（Review Times 1、5）是錄入題；其他次數照難度階梯。
+ * 該階梯都不可用時退回其他可用題型，完全沒有就回傳 null。
+ */
 export function pickReviewType(reviewTimes, word, ctx, rng = Math.random) {
   const rt = reviewTimes ?? 0;
+  if (TYPED_REVIEW_TIMES.includes(rt)) return pickTypedType(word, ctx);
   const avail = availableTypes(word, ctx);
   const tier = TIERS.find((t) => rt <= t.max);
   const candidates = tier.types.filter((t) => avail.includes(t));
   if (candidates.length) return pickOne(candidates, rng);
   const fallback = FALLBACK_ORDER.find((t) => avail.includes(t));
   return fallback ?? null;
+}
+
+/**
+ * 小測通過時要加的分數（questions = 這次小測的題目，通過時全部答對）：
+ *   learn    完成 Finished +1，輸入題答對 +1
+ *   review   完成一次 Review +1，輸入題答對 +1
+ *   mastered 完成 Mastered +2，每題輸入答對 +1（3 題全對才一起給）
+ * 選擇題答對不加分（答錯才扣，見 wrongPenalty）。
+ */
+export function passPoints(mode, questions) {
+  const typed = questions.filter((q) => isTypedType(q.type)).length;
+  const base = { learn: 1, review: 1, mastered: 2 }[mode];
+  if (base == null) throw new Error(`未知的小測模式：${mode}`);
+  return base + typed;
+}
+
+/** 答錯一題的扣分：只有選擇題答錯扣 1 分，輸入題答錯不扣。 */
+export function wrongPenalty(question) {
+  return question.type === 'mcq' ? -1 : 0;
 }
 
 /** 組出一題。pool 是可用來產生選項的單詞（通常是同一學生的全部單詞）。 */

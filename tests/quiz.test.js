@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  maskExample, countDistractors, availableTypes, pickReviewType,
+  maskExample, countDistractors, availableTypes, pickReviewType, pickLearnType, pickTypedType,
+  passPoints, wrongPenalty, isTypedType,
   buildQuestion, buildMasteredQuiz, checkAnswer, shuffle,
 } from '../src/quiz.js';
 
@@ -87,32 +88,90 @@ describe('availableTypes', () => {
   });
 });
 
-describe('pickReviewType 階梯', () => {
+describe('pickReviewType 階梯（第 2、6 次溫習是錄入題）', () => {
   const rng = seeded(7);
-  it('Review Times 空/0/1 → mcq', () => {
-    for (const rt of [null, undefined, 0, 1]) {
+  it('第 1 次溫習（Review Times 空/0）→ 選擇題', () => {
+    for (const rt of [null, undefined, 0]) {
       expect(pickReviewType(rt, chair, ctx, rng)).toBe('mcq');
     }
   });
-  it('2–3 → spell / cloze / test', () => {
+  it('第 2 次溫習（Review Times 1）→ 聽寫（錄入）', () => {
+    for (let i = 0; i < 20; i += 1) {
+      expect(pickReviewType(1, chair, ctx, seeded(i))).toBe('dictation');
+    }
+  });
+  it('第 3 次（Review Times 2）→ spell / cloze / test；第 4 次（3）同階梯', () => {
     for (let i = 0; i < 30; i += 1) {
       expect(['spell', 'cloze', 'test']).toContain(pickReviewType(2 + (i % 2), chair, ctx, seeded(i)));
     }
   });
-  it('4–5 → dictation / spell / cloze', () => {
+  it('第 5 次溫習（Review Times 4）→ dictation / spell / cloze', () => {
     for (let i = 0; i < 30; i += 1) {
-      expect(['dictation', 'spell', 'cloze']).toContain(pickReviewType(4 + (i % 2), chair, ctx, seeded(i)));
+      expect(['dictation', 'spell', 'cloze']).toContain(pickReviewType(4, chair, ctx, seeded(i)));
+    }
+  });
+  it('第 6 次溫習（Review Times 5）→ 聽寫（錄入）', () => {
+    for (let i = 0; i < 20; i += 1) {
+      expect(pickReviewType(5, chair, ctx, seeded(i))).toBe('dictation');
+    }
+  });
+  it('錄入題的回退：不能聽寫就用看意思拼詞，仍是錄入題', () => {
+    const noSpeech = { ...ctx, canSpeak: false };
+    for (const rt of [1, 5]) {
+      expect(isTypedType(pickReviewType(rt, chair, noSpeech, rng))).toBe(true);
+      expect(pickReviewType(rt, chair, noSpeech, rng)).toBe('spell');
     }
   });
   it('階梯題型不可用時回退到其他可用題型', () => {
     // 沒有干擾項 → 不能 mcq，退回 spell
     expect(pickReviewType(0, chair, { ...ctx, distractors: 0 }, rng)).toBe('spell');
-    // 只有 dictation 階梯的聽寫不可用，但 spell/cloze 仍可用
-    expect(['spell', 'cloze']).toContain(pickReviewType(5, chair, { ...ctx, canSpeak: false }, rng));
+    // 第 5 次的聽寫不可用，但 spell/cloze 仍可用
+    expect(['spell', 'cloze']).toContain(pickReviewType(4, chair, { ...ctx, canSpeak: false }, rng));
   });
   it('完全沒有可用題型回傳 null', () => {
     const empty = mk('9', 'x', '');
     expect(pickReviewType(0, empty, { canSpeak: false, distractors: 0 }, rng)).toBeNull();
+    expect(pickReviewType(1, empty, { canSpeak: false, distractors: 0 }, rng)).toBeNull();
+  });
+});
+
+describe('pickLearnType（點 Finished 第一次學完 → 錄入題）', () => {
+  it('優先聽寫', () => {
+    expect(pickLearnType(chair, ctx)).toBe('dictation');
+  });
+  it('不能聽寫時退回看意思拼詞，仍是錄入題', () => {
+    expect(pickLearnType(chair, { ...ctx, canSpeak: false })).toBe('spell');
+  });
+  it('沒有意思但有發音 → 聽寫；只有選擇題可用時才退回選擇題', () => {
+    expect(pickLearnType(mk('9', 'x', ''), ctx)).toBe('dictation');
+    expect(pickTypedType(mk('9', 'x', ''), { canSpeak: false, distractors: 0 })).toBeNull();
+  });
+});
+
+describe('計分：passPoints / wrongPenalty', () => {
+  const q = (type) => ({ type });
+  it('learn：完成 Finished +1，輸入題答對 +1', () => {
+    expect(passPoints('learn', [q('dictation')])).toBe(2);
+    expect(passPoints('learn', [q('spell')])).toBe(2);
+    expect(passPoints('learn', [q('mcq')])).toBe(1); // 選擇題答對不加分
+  });
+  it('review：完成 Review +1，輸入題答對 +1', () => {
+    expect(passPoints('review', [q('mcq')])).toBe(1);
+    expect(passPoints('review', [q('dictation')])).toBe(2);
+    expect(passPoints('review', [q('cloze')])).toBe(2);
+  });
+  it('mastered：完成 +2，3 題輸入各 +1，全對一次給 5 分', () => {
+    expect(passPoints('mastered', [q('spell'), q('cloze'), q('dictation')])).toBe(5);
+  });
+  it('未知模式丟錯', () => {
+    expect(() => passPoints('nope', [])).toThrow();
+  });
+  it('只有選擇題答錯才扣 1 分，輸入題答錯不扣', () => {
+    expect(wrongPenalty(q('mcq'))).toBe(-1);
+    for (const t of ['spell', 'cloze', 'dictation', 'test']) expect(wrongPenalty(q(t))).toBe(0);
+  });
+  it('isTypedType', () => {
+    expect(['mcq', 'spell', 'cloze', 'dictation', 'test'].map(isTypedType)).toEqual([false, true, true, true, true]);
   });
 });
 

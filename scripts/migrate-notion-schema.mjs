@@ -1,6 +1,7 @@
 // 一次性（冪等）修正 Notion 單詞表結構：兩位學生的 Vocabulary Database 統一加上
 //   Learning Date（date）／Next Review Date（date）／Defer（checkbox）
 //   Quiz Correct／Quiz Wrong（number，小測累計答對/答錯次數）／Last Quiz Date（date）
+//   Points（number，累計分；空的會用舊公式 1 + Review Times 初始化，保留孩子已賺到的分數）
 // 並把 Learning Date 為空的單詞從今天起每天 5 個錯開。Review Times 沿用現有欄位，Learned? 暫不刪除。
 //
 // 預設 dry-run，只印出會做的事；加 --apply 才真的寫入：
@@ -8,7 +9,7 @@
 //   node scripts/migrate-notion-schema.mjs --apply
 import 'dotenv/config';
 import {
-  createClient, extractId, findStudentDatabases, queryAll, localToday, sleep, getDate,
+  createClient, extractId, findStudentDatabases, queryAll, localToday, sleep, getDate, getNumber,
 } from './notion-lib.mjs';
 
 const APPLY = process.argv.includes('--apply');
@@ -27,6 +28,7 @@ const NEW_PROPS = {
   'Quiz Correct': { number: { format: 'number' } },
   'Quiz Wrong': { number: { format: 'number' } },
   'Last Quiz Date': { date: {} },
+  Points: { number: { format: 'number' } }, // 累計分（取代舊的由 Review Times 推算的分數）
 };
 
 async function main() {
@@ -86,6 +88,27 @@ async function main() {
         await notion.pages.update({
           page_id: page.id,
           properties: { 'Learning Date': { date: { start: date } } },
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(THROTTLE_MS);
+      }
+    }
+
+    // Points 為空 → 用舊公式（從沒 Finished 過 0 分，否則 1 + Review Times）初始化，保留孩子已賺到的分數。
+    // 已經有 Points 的不動（冪等）。欄位剛新增時 dry-run 沒有欄位可查，視為全部為空。
+    const needPoints = pages.filter((p) => getNumber(p.properties.Points) == null);
+    const initial = (p) => {
+      const rt = getNumber(p.properties['Review Times']);
+      return rt == null ? 0 : 1 + rt;
+    };
+    const total = needPoints.reduce((sum, p) => sum + initial(p), 0);
+    console.log(`  Points 為空：${needPoints.length} 個 → 以舊公式初始化（合計 ${total} 分）`);
+    if (APPLY) {
+      for (const page of needPoints) {
+        // eslint-disable-next-line no-await-in-loop
+        await notion.pages.update({
+          page_id: page.id,
+          properties: { Points: { number: initial(page) } },
         });
         // eslint-disable-next-line no-await-in-loop
         await sleep(THROTTLE_MS);
