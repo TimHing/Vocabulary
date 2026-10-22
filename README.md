@@ -72,6 +72,10 @@ Finished 和 Mastered 都要先通過小測，答對才寫入進度；答錯不�
 
 用 `npm run migrate:notion` 檢查（dry-run），`npm run migrate:notion -- --apply` 才真的新增缺少的欄位、把空的 Learning Date 錯開補上，並用舊公式初始化空的 Points。可重複執行（冪等）。
 
+## 部署權限與 firebase-tools 版本
+
+Firebase 部署固定使用 `firebase-tools 15.34.0`（新版需要服務帳戶多一個 Service Usage 權限，否則 403）。想升級回最新版時，照 [docs/firebase-部署權限.md](docs/firebase-部署權限.md) 的步驟做即可。
+
 ## 本機開發
 
 ```bash
