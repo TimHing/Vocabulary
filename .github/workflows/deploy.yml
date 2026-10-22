@@ -84,3 +84,7 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: snakegame-91f56
           channelId: live
+          # 固定 firebase-tools 版本，不要用 latest：15.34.1（2026-10-21）起部署前會多檢查
+          # serviceusage.services.get 權限，目前的服務帳戶沒有，會 403。15.34.0 是最後一次成功的版本。
+          # 之後若要升級，先給服務帳戶 Service Usage Consumer 角色，再改這個版本號。
+          firebaseToolsVersion: 15.34.0
